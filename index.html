@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Pages & Pomodoros - Pro Edition</title>
+    
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Caveat:wght@700&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], stylish: ['Caveat', 'cursive'], phase: ['Oswald', 'sans-serif'] },
+                    colors: { tomato: '#ff4757', dark: '#0b0e14', card: '#151a23', accent: '#ff4757', proglass: 'rgba(21, 26, 35, 0.6)' },
+                    animation: {
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 4s ease-in-out infinite',
+                        'droplet': 'droplet 2s infinite',
+                        'glow': 'glow 3s ease-in-out infinite alternate',
+                        'ambient-bg': 'ambient 15s ease infinite',
+                    },
+                    keyframes: {
+                        'float': { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-8px)' } },
+                        'droplet': { '0%': { transform: 'translateY(-15px)', opacity: '0' }, '50%': { opacity: '1' }, '100%': { transform: 'translateY(15px)', opacity: '0' } },
+                        'glow': { '0%': { filter: 'drop-shadow(0 0 10px rgba(255, 71, 87, 0.3))' }, '100%': { filter: 'drop-shadow(0 0 25px rgba(255, 71, 87, 0.8))' } },
+                        'ambient': { '0%, 100%': { backgroundPosition: '0% 50%' }, '50%': { backgroundPosition: '100% 50%' } }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* PRO AESTHETICS ENGINE */
+        html { background: transparent !important; }
+        
+        #main-container, #time-display, #animation-container, .animate-pulse, .animate-float {
+            transform: translateZ(0); will-change: transform, opacity, filter;
+        }
+
+        body {
+            -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+            background: linear-gradient(-45deg, rgba(7, 10, 19, var(--app-bg-opacity)), rgba(15, 23, 42, var(--app-bg-opacity)), rgba(5, 8, 15, var(--app-bg-opacity)));
+            background-size: 400% 400%;
+            animation: ambient-bg 15s ease infinite;
+            color: #f8fafc; margin: 0; overflow: hidden; width: 100vw; height: 100dvh; display: flex; align-items: center; justify-content: center;
+        }
+
+        button, input, select, .cursor-pointer { touch-action: manipulation; outline: none; }
+        
+        /* Premium Mac-like Scrollbars */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+        /* Sleek Status Highlights */
+        .active-session { 
+            background: linear-gradient(90deg, rgba(255, 71, 87, 0.15) 0%, rgba(255, 71, 87, 0.05) 100%);
+            border-left: 3px solid #ff4757; 
+            box-shadow: inset 0 0 20px rgba(255,71,87,0.05); 
+        }
+        .completed-session { opacity: 0.35; text-decoration: line-through; filter: grayscale(100%); }
+
+        :root { --app-bg-opacity: 1; --stealth-scale: 1.15; }
+        
+        /* Glassmorphism Panels */
+        #main-container { 
+            background: rgba(11, 14, 20, calc(var(--app-bg-opacity) * 0.75)) !important; 
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 30px 60px rgba(0,0,0, calc(var(--app-bg-opacity) * 0.8)), inset 0 1px 0 rgba(255,255,255,0.05) !important; 
+            border: 1px solid rgba(255,255,255,0.08) !important; 
+        }
+        #left-panel { background: transparent !important; border-color: rgba(255, 255, 255, 0.05) !important; }
+        #right-panel { background: rgba(5, 7, 10, calc(var(--app-bg-opacity) * 0.4)) !important; border-color: rgba(255, 255, 255, 0.05) !important; }
+
+        /* Premium Modals */
+        .pro-modal {
+            background: rgba(11, 14, 20, 0.85);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 40px 80px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        /* Glass Buttons */
+        .glass-btn {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); transform: translateY(-1px); }
+        .glass-btn:active { transform: scale(0.96); }
+
+        /* Text Gradients */
+        .text-gradient { background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        @media (min-width: 1024px) {
+            body.stealth-mode { background: transparent !important; }
+            body.stealth-mode #main-container { position: absolute; width: auto !important; height: auto !important; max-width: none !important; max-height: none !important; background: transparent !important; border: none !important; box-shadow: none !important; transform: scale(var(--stealth-scale)) translateZ(0); backdrop-filter: none; -webkit-backdrop-filter: none; }
+            body.stealth-mode[data-corner="bottom-right"] #main-container { bottom: 2rem; right: 2rem; top: auto; left: auto; transform-origin: bottom right; }
+            body.stealth-mode[data-corner="bottom-left"] #main-container { bottom: 2rem; left: 2rem; top: auto; right: auto; transform-origin: bottom left; }
+            body.stealth-mode[data-corner="top-right"] #main-container { top: 2rem; right: 2rem; bottom: auto; left: auto; transform-origin: top right; }
+            body.stealth-mode[data-corner="top-left"] #main-container { top: 2rem; left: 2rem; bottom: auto; right: auto; transform-origin: top left; }
+            body.stealth-mode #left-panel { width: auto !important; border: none !important; background: transparent !important; padding: 1rem !important; align-items: flex-end !important; }
+            body.stealth-mode #right-panel, body.stealth-mode #controls-container, body.stealth-mode #utility-links { display: none !important; }
+            body.stealth-mode #branding-div { transform: scale(0.75) translateZ(0); margin-bottom: 0.5rem !important; transform-origin: bottom center; }
+            body.stealth-mode #timer-wrapper { margin-bottom: 0 !important; align-items: flex-end !important; }
+            body.stealth-mode #time-display { font-size: 6rem !important; text-shadow: 0 8px 24px rgba(0,0,0,0.9), 0 0 40px rgba(0,0,0,0.6) !important; }
+            body.stealth-mode #current-phase-display { font-size: 0.75rem !important; padding: 0.25rem 1rem !important; margin-bottom: 0.5rem !important; background-color: rgba(11, 14, 20, 0.95) !important; color: #4ade80 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.8) !important; border: 1px solid rgba(74,222,128,0.2) !important; }
+            body.stealth-mode #session-type { font-size: 1rem !important; margin-top: 0.25rem !important; text-align: right !important; color: #4ade80 !important; text-shadow: 0 2px 4px rgba(0,0,0,0.8) !important; }
+            body.stealth-mode #animation-container { height: 3rem !important; margin-bottom: 0 !important; transform: scale(0.7) translateZ(0) !important; transform-origin: right center !important; justify-content: flex-end !important; width: 100% !important; }
+            
+            /* Enhanced Stealth Exit Button */
+            body.stealth-mode #stealth-btn { 
+                top: -1.25rem !important; left: -1.25rem !important; 
+                opacity: 0.8 !important; 
+                transform: scale(1.1) translateZ(0) !important; 
+                background: #2563eb !important; /* Bold Blue */
+                color: #ffffff !important; 
+                border: 2px solid rgba(255,255,255,0.3) !important; 
+                box-shadow: 0 0 20px rgba(37,99,235,0.7) !important; 
+                transition: all 0.3s ease !important;
+            }
+            body.stealth-mode #stealth-btn:hover { 
+                opacity: 1 !important; 
+                transform: scale(1.25) translateZ(0) !important; 
+                box-shadow: 0 0 30px rgba(37,99,235,1) !important;
+            }
+        }
+        body:not(.stealth-mode) #stealth-skip-btn { display: none !important; }
+    </style>
+</head>
+
+<body class="p-0 sm:p-2 lg:p-6 box-border transition-colors duration-700">
+
+    <div id="main-container" class="w-full h-full max-w-[1700px] max-h-[950px] rounded-none sm:rounded-[2rem] lg:rounded-[2.5rem] flex flex-col lg:flex-row overflow-hidden relative transition-all duration-700">
+
+        <!-- LEFT PANEL (TIMER) -->
+        <div id="left-panel" class="w-full lg:w-[55%] flex-1 lg:h-full flex flex-col items-center justify-center relative border-b lg:border-b-0 lg:border-r p-4 lg:p-12 z-10 overflow-y-auto no-scrollbar">
+            
+            <button id="stealth-btn" class="absolute top-4 left-4 lg:top-6 lg:left-6 text-slate-400 glass-btn p-3 rounded-full z-50 flex items-center justify-center transition-all" title="Toggle Prism Live Mode">
+                <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
+            </button>
+            <button id="stealth-skip-btn" class="absolute top-4 right-4 text-slate-400 glass-btn p-3 rounded-full z-50 flex items-center justify-center" title="Skip Phase">
+                <svg class="w-4 h-4 lg:w-5 lg:h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414l2-2a1 1 0 000-1.414l-2-2z" clip-rule="evenodd"></path></svg>
+            </button>
+
+            <div id="branding-div" class="text-center mb-2 sm:mb-6 lg:mb-8 w-full flex flex-col items-center justify-center pt-8 sm:pt-0">
+                <div class="text-[10px] sm:text-xs lg:text-sm font-bold font-sans tracking-[0.5em] uppercase text-slate-400 mb-2 opacity-80">Welcome To</div>
+                <h1 class="text-3xl sm:text-5xl lg:text-6xl font-stylish tracking-wide text-blue-400 drop-shadow-[0_0_15px_rgba(96,165,250,0.5)] leading-tight m-0 flex items-center justify-center gap-3">
+                    Pages & Pomodoros <span class="text-tomato animate-pulse-slow font-sans text-xl sm:text-3xl lg:text-4xl">🍅</span>
+                </h1>
+            </div>
+
+            <div id="current-phase-display" class="bg-tomato/10 px-5 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs lg:text-sm font-bold text-tomato mb-2 lg:mb-8 border border-tomato/20 shadow-[0_0_15px_rgba(255,71,87,0.1)] tracking-widest uppercase font-phase backdrop-blur-md">Ready to Start</div>
+            
+            <div id="timer-wrapper" class="relative w-full mb-4 sm:mb-6 lg:mb-12 flex flex-col items-center justify-center group active:scale-[0.98] transition-transform cursor-pointer">
+                <div id="animation-container" class="min-h-[5rem] sm:min-h-[6.5rem] lg:min-h-[8.5rem] mb-2 flex items-center justify-center pointer-events-none overflow-visible p-4">
+                    <div id="anim-study" class="hidden text-tomato animate-float"><svg class="w-14 h-14 sm:w-16 sm:h-16 lg:w-24 lg:h-24 animate-glow overflow-visible" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.866 8.21 8.21 0 003 2.48z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1A3.75 3.75 0 0012 18z"></path></svg></div>
+                    <div id="anim-break" class="hidden text-blue-400 relative w-14 h-14 sm:w-16 sm:h-16 lg:w-24 lg:h-24 flex items-center justify-center overflow-visible"><svg class="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10 absolute -top-4 animate-droplet text-blue-300 overflow-visible" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.23.615 1.23.616a1 1 0 01-.894 1.789l-1.6-.8L11 11.323V18a1 1 0 11-2 0v-6.677l-3.954-1.582-1.6.8a1 1 0 11-.894-1.79l1.23-.615-1.23-.616a1 1 0 01.894-1.789l1.6.8L9 4.323V3a1 1 0 011-1z" clip-rule="evenodd" /></svg><svg class="w-12 h-12 sm:w-14 sm:h-14 lg:w-20 lg:h-20 absolute bottom-0 animate-glow overflow-visible" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v10a4 4 0 004 4h8a4 4 0 004-4V4H4z M10 4v6m4-6v6"></path></svg></div>
+                </div>
+                <span id="time-display" class="text-[25vw] sm:text-[15vw] md:text-9xl lg:text-[11.5rem] leading-[0.85] font-extrabold font-sans tracking-tighter text-white drop-shadow-[0_15px_35px_rgba(0,0,0,0.5)] tabular-nums transition-colors duration-300">00:00</span>
+                <span id="session-type" class="text-xs sm:text-sm lg:text-lg font-medium text-slate-400 mt-3 sm:mt-4 lg:mt-6 uppercase tracking-[0.2em] text-center px-4 pointer-events-none group-hover:text-slate-300 transition-colors">Select Session</span>
+            </div>
+
+            <!-- Sleek Control Panel -->
+            <div id="controls-container" class="flex flex-wrap justify-center items-center gap-3 sm:gap-4 lg:gap-6 w-full px-4 mb-4 lg:mb-8">
+                <button id="undo-btn" class="glass-btn text-slate-300 p-3 lg:p-4 rounded-full disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center group"><svg class="w-5 h-5 lg:w-6 lg:h-6 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg></button>
+                
+                <button id="start-btn" class="relative group bg-gradient-to-br from-tomato to-[#d63031] text-white font-bold p-5 lg:p-6 rounded-full transition-all active:scale-95 flex items-center justify-center shadow-[0_10px_30px_rgba(255,71,87,0.4)] border border-red-400/30 overflow-hidden">
+                    <div class="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 rounded-full"></div>
+                    <svg class="w-8 h-8 lg:w-10 lg:h-10 ml-1 relative z-10" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"></path></svg>
+                </button>
+                <button id="pause-btn" class="hidden relative group bg-slate-800 text-white font-bold p-5 lg:p-6 rounded-full transition-all active:scale-95 flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.5)] border border-slate-600">
+                    <svg class="w-8 h-8 lg:w-10 lg:h-10 relative z-10 text-tomato" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                </button>
+                
+                <button id="reset-phase-btn" class="glass-btn text-slate-300 p-3 lg:p-4 rounded-full flex items-center justify-center group"><svg class="w-5 h-5 lg:w-6 lg:h-6 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg></button>
+                <button id="skip-btn" class="glass-btn text-slate-300 p-3 lg:p-4 rounded-full disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center group"><svg class="w-5 h-5 lg:w-6 lg:h-6 group-hover:translate-x-0.5 transition-transform" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414l2-2a1 1 0 000-1.414l-2-2z" clip-rule="evenodd"></path></svg></button>
+            </div>
+            
+            <!-- Pro Utility Icons -->
+            <div id="utility-links" class="flex flex-wrap items-center justify-center gap-3 sm:gap-4 lg:gap-5 pb-2">
+                 <button id="dim-mode-btn" class="glass-btn text-indigo-400 hover:text-indigo-300 flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-xl font-bold text-lg lg:text-xl" title="Dim Battery Saver">🌙</button>
+                 <button id="task-manager-btn" class="glass-btn text-purple-400 hover:text-purple-300 flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-xl font-bold text-lg lg:text-xl" title="NEET Task Vault">📚</button>
+                 <button id="stats-btn" class="glass-btn text-amber-400 hover:text-amber-300 flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-xl font-bold text-lg lg:text-xl" title="Analytics & Reports">📊</button>
+                 <button id="edit-schedule-btn" class="glass-btn text-slate-300 hover:text-white flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-xl font-bold text-lg lg:text-xl" title="Settings & Sync">⚙️</button>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL (SCHEDULE & GUIDES) -->
+        <div id="right-panel" class="w-full lg:w-[45%] h-[40%] sm:h-[45%] min-h-[220px] lg:min-h-0 lg:h-full p-4 sm:p-5 lg:p-8 flex flex-col relative border-t lg:border-t-0 lg:border-l transition-all duration-500 z-10">
+            <div class="flex justify-between items-center mb-4 lg:mb-6 border-b border-white/5 pb-3">
+                <h2 class="text-sm sm:text-base lg:text-lg font-bold text-white tracking-wide flex items-center gap-2"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Live Protocol</h2>
+                <span id="session-count-badge" class="text-[9px] sm:text-[10px] lg:text-xs font-semibold text-slate-400 bg-white/5 border border-white/10 px-2.5 py-1 rounded-md uppercase tracking-widest">0 Sessions</span>
+            </div>
+            
+            <div id="schedule-container" class="flex-1 overflow-y-auto pr-1 sm:pr-2 flex flex-col gap-2 scroll-smooth mb-4"></div>
+            
+            <div id="deep-guide-box" class="mt-auto bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl shadow-2xl relative overflow-hidden backdrop-blur-md shrink-0 group">
+                <div class="absolute -right-10 -top-10 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-colors duration-500 pointer-events-none"></div>
+                <h3 id="guide-box-title" class="text-[9px] sm:text-[10px] uppercase font-bold tracking-[0.2em] text-slate-400 mb-2 flex items-center gap-2 opacity-80">Guideline Active</h3>
+                <p id="deep-guide-text" class="text-xs sm:text-sm leading-relaxed text-slate-200 font-medium relative z-10 font-sans"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- PRO DIM OVERLAY -->
+    <div id="dim-overlay" class="hidden fixed inset-0 bg-black z-[999] flex flex-col items-center justify-center cursor-pointer transition-opacity duration-700">
+        <div class="text-slate-600 font-mono text-[25vw] sm:text-9xl tracking-tighter transition-colors" id="dim-time-display">00:00</div>
+        <div class="text-slate-700 font-phase tracking-[0.3em] mt-4 lg:mt-6 uppercase text-sm lg:text-xl" id="dim-phase-display">STUDY</div>
+        <div class="absolute bottom-12 text-slate-800 text-[10px] font-bold uppercase tracking-[0.3em] animate-pulse">Tap anywhere to wake</div>
+    </div>
+
+    <!-- PRO MODALS (GLASSMORPHISM) -->
+    <div id="settings-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center p-2 sm:p-4 transition-all">
+        <div class="pro-modal rounded-2xl sm:rounded-3xl p-5 sm:p-6 lg:p-8 w-full max-w-2xl max-h-[95dvh] flex flex-col">
+            <div class="flex justify-between items-center mb-4 sm:mb-5 border-b border-white/10 pb-3 shrink-0">
+                <h2 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2 tracking-wide">⚙️ Preferences</h2>
+                <button id="close-settings-btn" class="text-slate-400 hover:text-white glass-btn rounded-full p-2 active:scale-95 transition-all">✕</button>
+            </div>
+            
+            <div class="overflow-y-auto pr-1 flex-1 space-y-4 no-scrollbar">
+                <button id="cloud-sync-btn" class="w-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 py-3.5 rounded-xl font-semibold text-xs sm:text-sm flex justify-center items-center gap-2 transition-all active:scale-[0.98]">
+                    <span class="text-lg sm:text-xl drop-shadow-md">☁️</span> Connect Omni-Cloud Sync
+                </button>
+
+                <!-- Clean Settings Cards -->
+                <div class="bg-white/5 p-4 rounded-xl border border-white/5 space-y-3">
+                    <h3 class="text-[10px] sm:text-xs font-semibold text-slate-300 flex items-center gap-2 uppercase tracking-widest mb-1"><span class="text-blue-400">✈️</span> Telegram God-Mode</h3>
+                    <input type="password" id="tg-token-input" placeholder="Bot Token (e.g. 12345:ABCde...)" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500/50 transition-colors mb-2">
+                    <input type="password" id="tg-chatid-input" placeholder="Chat ID (e.g. 987654321)" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500/50 transition-colors">
+                </div>
+
+                <div class="bg-white/5 p-4 rounded-xl border border-white/5 space-y-3">
+                    <h3 class="text-[10px] sm:text-xs font-semibold text-slate-300 flex items-center gap-2 uppercase tracking-widest mb-1"><span class="text-tomato">🔥</span> AI Coach Intelligence</h3>
+                    <label class="text-[9px] text-slate-500 block uppercase tracking-wider">Study Motivation (1 per line)</label>
+                    <textarea id="custom-study-quotes" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-tomato/50 transition-colors h-16 resize-none" placeholder="No distractions. Lock in."></textarea>
+                    <label class="text-[9px] text-slate-500 block uppercase tracking-wider mt-2">Break Guidelines (1 per line)</label>
+                    <textarea id="custom-break-quotes" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500/50 transition-colors h-16 resize-none" placeholder="Hydrate. Breathe."></textarea>
+                </div>
+
+                <div class="bg-white/5 p-4 rounded-xl border border-white/5 space-y-3">
+                    <div class="flex flex-col gap-1">
+                        <label class="text-[10px] sm:text-xs font-semibold text-slate-300 block uppercase tracking-wider">Stealth Corner Position</label>
+                        <select id="stealth-corner-select" class="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-white/20 appearance-none">
+                            <option value="bottom-right">Bottom Right</option>
+                            <option value="bottom-left">Bottom Left</option>
+                            <option value="top-right">Top Right</option>
+                            <option value="top-left">Top Left</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="bg-white/5 border border-white/10 rounded-xl p-4">
+                    <h3 class="text-[10px] sm:text-xs font-semibold text-slate-300 uppercase tracking-widest mb-3">🗓️ Weekly Protocol</h3>
+                    <div class="flex gap-2 overflow-x-auto no-scrollbar mb-3 pb-1" id="template-day-tabs">
+                        <button type="button" class="day-tab-btn flex-1 min-w-[35px] glass-btn text-slate-400 text-[10px] px-2 py-2 rounded-lg font-semibold" data-day="1">Mon</button>
+                        <button type="button" class="day-tab-btn flex-1 min-w-[35px] glass-btn text-slate-400 text-[10px] px-2 py-2 rounded-lg font-semibold" data-day="2">Tue</button>
+                        <button type="button" class="day-tab-btn flex-1 min-w-[35px] glass-btn text-slate-400 text-[10px] px-2 py-2 rounded-lg font-semibold" data-day="3">Wed</button>
+                        <button type="button" class="day-tab-btn flex-1 min-w-[35px] glass-btn text-slate-400 text-[10px] px-2 py-2 rounded-lg font-semibold" data-day="4">Thu</button>
+                        <button type="button" class="day-tab-btn flex-1 min-w-[35px] glass-btn text-slate-400 text-[10px] px-2 py-2 rounded-lg font-semibold" data-day="5">Fri</button>
+                        <button type="button" class="day-tab-btn flex-1 min-w-[35px] glass-btn text-slate-400 text-[10px] px-2 py-2 rounded-lg font-semibold" data-day="6">Sat</button>
+                        <button type="button" class="day-tab-btn flex-1 min-w-[35px] glass-btn text-slate-400 text-[10px] px-2 py-2 rounded-lg font-semibold" data-day="0">Sun</button>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-2 mb-3 p-2 bg-black/30 border border-white/5 rounded-lg items-center">
+                        <input type="text" id="new-sess-title" placeholder="Block Name" class="flex-1 bg-black/40 border border-white/10 rounded-md px-3 py-2 text-xs text-white focus:outline-none w-full">
+                        <input type="number" id="new-sess-dur" placeholder="Mins" class="w-full sm:w-16 bg-black/40 border border-white/10 rounded-md px-2 py-2 text-xs text-white font-mono text-center focus:outline-none">
+                        <select id="new-sess-type" class="w-full sm:w-20 bg-black/40 border border-white/10 rounded-md px-2 py-2 text-xs text-slate-300 focus:outline-none appearance-none text-center">
+                            <option value="work">Study</option><option value="break">Break</option>
+                        </select>
+                        <button id="add-sess-btn" class="w-full sm:w-auto bg-white/10 hover:bg-white/20 text-white font-semibold px-4 py-2 rounded-md text-xs active:scale-95 transition-all border border-white/10">Add</button>
+                    </div>
+                    <div id="settings-list" class="space-y-2 max-h-[180px] overflow-y-auto pr-2 border-t border-white/5 pt-3 no-scrollbar"></div>
+                </div>
+            </div>
+
+            <div class="flex flex-col-reverse sm:flex-row justify-between items-center gap-3 border-t border-white/10 pt-4 mt-4 shrink-0">
+                <button id="factory-reset-btn" class="text-red-400 hover:text-red-300 text-[10px] font-bold uppercase tracking-widest transition-colors opacity-70 hover:opacity-100">🗑️ Factory Reset</button>
+                <button id="save-settings-btn" class="bg-white/10 hover:bg-white/20 border border-white/10 text-white px-6 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all active:scale-95 w-full sm:w-auto">Save & Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PRO TASK MODAL -->
+    <div id="task-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[95] flex items-center justify-center p-2 sm:p-4 transition-all">
+        <div class="pro-modal rounded-2xl sm:rounded-3xl p-5 sm:p-6 lg:p-8 w-full max-w-3xl max-h-[95dvh] flex flex-col">
+            <div class="flex justify-between items-center mb-4 sm:mb-5 border-b border-white/10 pb-3 shrink-0">
+                <h2 class="text-lg sm:text-xl font-bold text-white flex items-center gap-2 tracking-wide">📚 NEET Vault</h2>
+                <button id="close-task-btn" class="text-slate-400 hover:text-white glass-btn rounded-full p-2 active:scale-95 transition-all">✕</button>
+            </div>
+            
+            <div class="flex gap-2 mb-4 bg-black/30 p-1.5 rounded-xl border border-white/5 shrink-0 overflow-x-auto no-scrollbar" id="task-tabs">
+                <button class="task-tab flex-1 min-w-[75px] bg-white/10 text-white border border-white/10 font-semibold py-2 px-2 rounded-lg text-xs sm:text-sm transition-all shadow-sm" data-tab="backlog">📦 Backlogs</button>
+                <button class="task-tab flex-1 min-w-[75px] bg-transparent text-slate-400 font-semibold py-2 px-2 rounded-lg text-xs sm:text-sm transition-all hover:bg-white/5 hover:text-slate-300" data-tab="revision">🔁 Revision</button>
+                <button class="task-tab flex-1 min-w-[75px] bg-transparent text-slate-400 font-semibold py-2 px-2 rounded-lg text-xs sm:text-sm transition-all hover:bg-white/5 hover:text-slate-300" data-tab="mcq">🎯 Daily MCQs</button>
+                <button class="task-tab flex-1 min-w-[75px] bg-transparent text-slate-400 font-semibold py-2 px-2 rounded-lg text-xs sm:text-sm transition-all hover:bg-white/5 hover:text-slate-300" data-tab="matrix">📈 Matrix</button>
+            </div>
+
+            <div id="subject-filter-container" class="flex gap-2 mb-4 shrink-0">
+                <input type="hidden" id="active-subject-input" value="Physics">
+                <button class="subj-btn active flex-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 font-semibold py-2 rounded-lg text-xs transition-all" data-subj="Physics">Physics</button>
+                <button class="subj-btn flex-1 glass-btn text-slate-400 font-semibold py-2 rounded-lg text-xs transition-all hover:text-slate-200" data-subj="Chemistry">Chemistry</button>
+                <button class="subj-btn flex-1 glass-btn text-slate-400 font-semibold py-2 rounded-lg text-xs transition-all hover:text-slate-200" data-subj="Biology">Biology</button>
+            </div>
+
+            <div id="task-add-form" class="flex gap-2 mb-4 shrink-0">
+                <input type="text" id="task-title-input" placeholder="Chapter name or topic..." class="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-white/20 transition-colors">
+                <button id="add-task-btn" class="bg-white/10 hover:bg-white/20 border border-white/10 text-white font-semibold px-5 py-2.5 rounded-lg text-xs transition-all active:scale-95">Add</button>
+            </div>
+
+            <!-- Sleek MCQ Entry -->
+            <div id="mcq-add-form" class="hidden bg-black/30 border border-white/5 p-4 rounded-xl mb-4 shrink-0">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]" id="mcq-subject-title">Physics Daily Target</h3>
+                    <button id="save-mcq-btn" class="glass-btn text-emerald-400 text-[10px] font-bold px-4 py-1.5 rounded-md active:scale-95 transition-all">Save Data</button>
+                </div>
+                <div class="flex gap-3 items-center mb-4">
+                    <div class="flex-1"><label class="text-[9px] text-slate-500 block mb-1.5 uppercase tracking-wider font-semibold">Target</label><input type="number" id="mcq-target" class="w-full bg-black/40 border border-white/10 rounded-md p-2 text-xs text-white text-center font-mono focus:border-blue-500/50 outline-none transition-colors" min="0"></div>
+                    <div class="flex-1"><label class="text-[9px] text-slate-500 block mb-1.5 uppercase tracking-wider font-semibold">Attempted</label><input type="number" id="mcq-attempted" class="w-full bg-black/40 border border-white/10 rounded-md p-2 text-xs text-white text-center font-mono focus:border-blue-500/50 outline-none transition-colors" min="0"></div>
+                    <div class="flex-1"><label class="text-[9px] text-slate-500 block mb-1.5 uppercase tracking-wider font-semibold">Correct</label><input type="number" id="mcq-correct" class="w-full bg-black/40 border border-white/10 rounded-md p-2 text-xs text-white text-center font-mono focus:border-blue-500/50 outline-none transition-colors" min="0"></div>
+                </div>
+                <div class="flex justify-around bg-black/40 rounded-lg p-3 border border-white/5">
+                    <div class="text-center"><span class="text-[9px] text-slate-500 uppercase font-bold tracking-[0.15em]">Auto-Incorrect</span><p id="mcq-display-incorrect" class="text-base font-bold text-tomato font-mono mt-1">0</p></div>
+                    <div class="w-px bg-white/10"></div>
+                    <div class="text-center"><span class="text-[9px] text-slate-500 uppercase font-bold tracking-[0.15em]">Auto-Left</span><p id="mcq-display-left" class="text-base font-bold text-amber-400 font-mono mt-1">0</p></div>
+                </div>
+            </div>
+
+            <div id="vault-list-container" class="flex-1 overflow-y-auto pr-2 space-y-2 min-h-[200px] no-scrollbar"></div>
+        </div>
+    </div>
+
+    <!-- PRO SYNC MODAL -->
+    <div id="sync-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 transition-all">
+        <div class="pro-modal rounded-3xl p-6 lg:p-8 shadow-2xl w-full max-w-sm text-center relative overflow-hidden">
+            <div class="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <button id="close-sync-btn" class="absolute top-4 right-4 text-slate-400 hover:text-white glass-btn rounded-full p-2 active:scale-95 z-10">✕</button>
+            
+            <div class="text-4xl mb-3 drop-shadow-md relative z-10">☁️</div>
+            <h2 class="text-xl font-bold text-white mb-2 tracking-wide relative z-10">Omni-Cloud</h2>
+            <p class="text-[11px] text-slate-400 mb-5 font-medium relative z-10">Link devices. Data syncs instantly.</p>
+            
+            <div class="space-y-4 text-left mb-6 relative z-10">
+                <div>
+                    <label class="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Room ID / Email</label>
+                    <input type="text" id="sync-email-input" placeholder="e.g. neet2027" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Security Key</label>
+                    <div class="relative">
+                        <input type="password" id="sync-pass-input" placeholder="••••••••" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-colors pr-12">
+                        <button id="toggle-sync-pass-btn" type="button" class="absolute inset-y-0 right-1 px-3 flex items-center text-slate-500 hover:text-slate-300 transition-colors bg-transparent border-none">
+                            <svg id="eye-icon-closed" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
+                            <svg id="eye-icon-open" class="hidden w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.543 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="sync-status" class="hidden mb-4 text-[10px] font-bold tracking-wide py-2 px-3 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 relative z-10 backdrop-blur-md">
+                ✅ Connected! Omni-Cloud Active.
+            </div>
+            
+            <button id="login-sync-btn" class="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white font-semibold py-3 rounded-xl text-sm transition-all active:scale-[0.98] shadow-lg relative z-10">Connect System</button>
+        </div>
+    </div>
+
+    <div id="custom-toast" class="hidden fixed top-6 right-6 bg-white/10 backdrop-blur-xl border border-white/20 text-white font-medium py-3 px-5 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] z-[999] text-xs sm:text-sm transition-all duration-300 transform translate-x-0"></div>
+
+    <!-- PRO STATS MODAL -->
+    <div id="stats-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 transition-all">
+        <div class="pro-modal rounded-3xl p-6 lg:p-8 shadow-2xl w-full max-w-sm relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+            <button id="close-stats-btn" class="absolute top-4 right-4 text-slate-400 hover:text-white glass-btn rounded-full p-2 active:scale-95 z-10">✕</button>
+            
+            <div class="flex items-center gap-2 mb-5 border-b border-white/10 pb-3 relative z-10">
+                <span class="text-xl drop-shadow-md">📊</span>
+                <h2 class="text-lg font-bold text-white tracking-wide">Analytics</h2>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3 mb-5 relative z-10">
+                <div class="bg-black/30 border border-white/5 rounded-xl p-4 text-center shadow-inner hover:bg-black/40 transition-colors">
+                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Focus Today</p>
+                    <p id="stat-today-mins" class="text-2xl font-mono font-bold text-emerald-400 text-gradient bg-gradient-to-br from-emerald-400 to-teal-600">0<span class="text-[10px] text-slate-500 ml-1">m</span></p>
+                </div>
+                <div class="bg-black/30 border border-white/5 rounded-xl p-4 text-center shadow-inner hover:bg-black/40 transition-colors">
+                    <p class="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">Sessions</p>
+                    <p id="stat-today-sessions" class="text-2xl font-mono font-bold text-blue-400 text-gradient bg-gradient-to-br from-blue-400 to-indigo-600">0</p>
+                </div>
+            </div>
+            
+            <div class="bg-white/5 border border-white/10 rounded-xl p-4 mb-5 text-center relative z-10 backdrop-blur-sm">
+                <h3 class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">7-Day Trajectory</h3>
+                <p id="stat-weekly-total" class="text-xl font-mono font-bold text-white tracking-tight">0m</p>
+            </div>
+            
+            <button id="send-telegram-report-btn" class="w-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 font-semibold py-3 rounded-xl text-xs transition-all active:scale-[0.98] flex items-center justify-center gap-2 relative z-10">
+                <span class="drop-shadow-md">✈️</span> Send God-Mode Report
+            </button>
+        </div>
+    </div>
+
+    <!-- PRO AI COACH MODALS -->
+    <div id="ai-coach-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-xl z-[120] flex items-center justify-center p-4 transition-all">
+        <div class="bg-black/50 border border-tomato/30 rounded-3xl p-8 lg:p-12 shadow-[0_0_80px_rgba(255,71,87,0.15)] w-full max-w-[600px] text-center relative overflow-hidden backdrop-blur-3xl">
+            <div class="absolute inset-0 bg-gradient-to-b from-tomato/5 to-transparent pointer-events-none"></div>
+            <button id="close-ai-btn" onclick="document.getElementById('ai-coach-modal').classList.add('hidden')" class="absolute top-4 right-4 text-slate-500 hover:text-white glass-btn rounded-full p-2 z-10">✕</button>
+            <div class="text-5xl lg:text-6xl mb-6 animate-float drop-shadow-2xl relative z-10">🤖</div>
+            <h2 class="text-xl lg:text-2xl font-bold text-white mb-6 uppercase tracking-[0.3em] text-gradient bg-gradient-to-r from-tomato to-red-600 relative z-10">Reality Check</h2>
+            <div class="bg-black/40 p-6 lg:p-8 rounded-2xl border border-white/5 min-h-[120px] flex items-center justify-center relative z-10 shadow-inner">
+                <p id="ai-coach-text" class="text-base lg:text-lg text-slate-200 font-medium italic leading-relaxed tracking-wide"></p>
+            </div>
+            <button id="dismiss-ai-btn" onclick="document.getElementById('ai-coach-modal').classList.add('hidden')" class="mt-8 w-full sm:w-auto bg-white/10 hover:bg-white/20 border border-white/10 text-white px-10 py-3.5 rounded-full text-xs font-bold tracking-[0.2em] uppercase transition-all active:scale-95 relative z-10">Back to Work</button>
+        </div>
+    </div>
+
+    <div id="full-screen-guide-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-2xl z-[120] flex items-center justify-center p-4 lg:p-8 transition-all">
+        <div class="max-w-4xl w-full text-center relative">
+            <button id="close-guide-btn" onclick="document.getElementById('full-screen-guide-modal').classList.add('hidden')" class="absolute -top-12 right-0 lg:-top-16 lg:-right-4 text-slate-500 hover:text-white glass-btn rounded-full p-3 transition-all">✕</button>
+            <h2 class="text-2xl lg:text-4xl font-phase text-blue-400 mb-6 lg:mb-8 uppercase tracking-[0.3em] drop-shadow-[0_0_20px_rgba(96,165,250,0.3)]">Break Protocol</h2>
+            <div class="bg-blue-900/10 border border-blue-500/20 p-8 lg:p-12 rounded-[2.5rem] shadow-[0_20px_60px_rgba(0,0,0,0.5)] backdrop-blur-md">
+                <p id="full-screen-guide-text" class="text-lg lg:text-2xl text-slate-200 font-medium leading-relaxed font-sans tracking-wide"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CORE JAVASCRIPT (100% UNTOUCHED LOGIC)
+        window.safeGet = function(key, def) { try { return localStorage.getItem(key) || def; } catch(e) { return def; } };
+        window.safeSet = function(key, val) { try { localStorage.setItem(key, val); } catch(e) {} };
+        window.safeRemove = function(key) { try { localStorage.removeItem(key); } catch(e) {} };
+        window.getLocalTodayString = function() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().split('T')[0]; };
+        
+        window.showToast = function(msg, isError = false) {
+            const toast = document.getElementById('custom-toast');
+            toast.textContent = msg;
+            toast.className = `fixed top-6 right-6 backdrop-blur-xl border font-medium py-3 px-5 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] z-[999] text-xs sm:text-sm transition-all duration-300 transform translate-x-0 ${isError ? 'bg-red-500/10 border-red-500/20 text-red-100' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-100'}`;
+            toast.classList.remove('hidden');
+            setTimeout(() => { toast.classList.add('translate-x-[150%]'); setTimeout(()=> toast.classList.add('hidden'), 300); }, 3000);
+        }
+
+        let wakeLock = null;
+        window.requestWakeLock = async function() {
+            try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); } } catch (err) {}
+        }
+        window.releaseWakeLock = function() {
+            if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }).catch(() => {}); }
+        }
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAbi9-V0S3DOtOAgBirMxrvV6J-XdwLf3Q",
+            authDomain: "neettimercloud.firebaseapp.com",
+            projectId: "neettimercloud",
+            storageBucket: "neettimercloud.firebasestorage.app",
+            messagingSenderId: "337999532676",
+            appId: "1:337999532676:web:545ae526ab038192e3e8d1",
+            measurementId: "G-EQ142NCNJG"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        async function ensureAuth() {
+            if (auth.currentUser) return auth.currentUser;
+            try { return await auth.signInAnonymously(); } 
+            catch (e) { return null; }
+        }
+
+        const defaultSchedule = [
+            { id: 1, type: 'work', title: 'Deep Study 1', duration: 50 * 60 },
+            { id: 2, type: 'break', title: 'Stretch Break', duration: 10 * 60, guide: 'Hydrate.' },
+            { id: 3, type: 'work', title: 'Deep Study 2', duration: 50 * 60 },
+            { id: 4, type: 'done', title: 'Day Complete! 🎉', duration: 0, guide: 'Rest.' }
+        ];
+
+        window.schedule = [];
+        window.weeklyTemplates = JSON.parse(safeGet('pages_pomodoro_weekly_v11', null));
+        if (!window.weeklyTemplates) {
+            window.weeklyTemplates = {0:[], 1:[], 2:[], 3:[], 4:[], 5:[], 6:[]};
+            for(let i=0; i<=6; i++) { window.weeklyTemplates[i] = JSON.parse(JSON.stringify(defaultSchedule)); }
+            safeSet('pages_pomodoro_weekly_v11', JSON.stringify(window.weeklyTemplates));
+        }
+
+        window.activeTemplateDay = new Date().getDay();
+        window.currentStepIndex = 0; window.timeLeft = 0; window.timerInterval = null; window.isRunning = false; window.targetEndTime = 0; window.lastRenderedTime = -1;
+        window.aiPopupTimeout = null; window.guidePopupTimeout = null; window.lastPopupStep = -1;
+        
+        window.persistState = function() { safeSet('pages_pomodoro_app_state', JSON.stringify({ currentStepIndex: window.currentStepIndex, timeLeft: window.timeLeft, isRunning: window.isRunning, targetEndTime: window.targetEndTime })); }
+
+        window.defaultStudyQuotes = [
+            "No distractions. Lock in.",
+            "Your competition is working right now. Are you?",
+            "Pain is temporary. The NEET rank is forever.",
+            "Do not touch your phone. Execute the protocol.",
+            "Stay hard. Focus on the exact question in front of you.",
+            "Stop thinking about the time. Destroy the syllabus.",
+            "Only the obsessed survive. Get back to work."
+        ];
+        
+        window.defaultBreakQuotes = [
+            "Hydrate. Breathe. DO NOT doomscroll.",
+            "Stand up and stretch. Get the blood flowing.",
+            "Rest your eyes. Look 20 feet away.",
+            "Breathe in 4s, hold 4s, out 4s. Reset your brain.",
+            "Stay off social media. Your brain needs actual rest."
+        ];
+
+        window.studyQuotes = JSON.parse(safeGet('pages_pomodoro_study_quotes', JSON.stringify(window.defaultStudyQuotes)));
+        window.breakQuotes = JSON.parse(safeGet('pages_pomodoro_break_quotes', JSON.stringify(window.defaultBreakQuotes)));
+
+        let currentSyncRoom = safeGet('pages_pomodoro_sync_room', '');
+        let unsubscribeSnapshot = null;
+        let isInternalSyncUpdate = false;
+
+        window.broadcastToCloud = async function() {
+            if (!currentSyncRoom || isInternalSyncUpdate) return;
+            await ensureAuth(); 
+            try {
+                let tasksStr = safeGet('pages_pomodoro_tasks_v11', '[]');
+                let weeklyStr = safeGet('pages_pomodoro_weekly_v11', null);
+                let statsStr = safeGet('pages_pomodoro_stats_v11', '{}');
+                let mcqStr = safeGet('pages_pomodoro_mcq_v11', '{}');
+                
+                const roomDoc = db.collection('artifacts').doc('neettimercloud').collection('public').doc('data').collection('sync_rooms').doc(currentSyncRoom);
+                await roomDoc.set({
+                    stepIndex: window.currentStepIndex, timeLeft: window.timeLeft, isRunning: window.isRunning, targetEndTime: window.targetEndTime,
+                    schedule: window.schedule, tasksStr: tasksStr, weeklyStr: weeklyStr, statsStr: statsStr, mcqStr: mcqStr,
+                    timestamp: Date.now()
+                }, { merge: true });
+            } catch(e) {}
+        }
+
+        async function connectToCloud(roomId) {
+            await ensureAuth(); 
+            try {
+                if (unsubscribeSnapshot) unsubscribeSnapshot();
+                const syncStatusEl = document.getElementById('sync-status');
+                if (syncStatusEl) syncStatusEl.classList.remove('hidden');
+                
+                const roomDoc = db.collection('artifacts').doc('neettimercloud').collection('public').doc('data').collection('sync_rooms').doc(roomId);
+                unsubscribeSnapshot = roomDoc.onSnapshot((docSnap) => {
+                    if (docSnap.exists) {
+                        const data = docSnap.data(); isInternalSyncUpdate = true;
+                        
+                        if (data.schedule && JSON.stringify(window.schedule) !== JSON.stringify(data.schedule)) { window.schedule = data.schedule; safeSet('pages_pomodoro_schedule_v11', JSON.stringify(window.schedule)); window.renderSchedule(); }
+                        if (data.stepIndex !== undefined && window.currentStepIndex !== data.stepIndex) { window.loadStep(data.stepIndex, true); }
+                        
+                        if (data.isRunning !== undefined) {
+                            if (data.isRunning && !window.isRunning) { window.targetEndTime = data.targetEndTime; let remaining = Math.round((window.targetEndTime - Date.now()) / 1000); window.timeLeft = remaining > 0 ? remaining : 0; window.startTimer(true); } 
+                            else if (!data.isRunning && window.isRunning) { window.timeLeft = data.timeLeft; window.stopTimer(true); }
+                        } else if (!window.isRunning && data.timeLeft !== undefined) { window.timeLeft = data.timeLeft; window.updateDisplay(); }
+                        
+                        if (data.tasksStr && safeGet('pages_pomodoro_tasks_v11', '[]') !== data.tasksStr) { safeSet('pages_pomodoro_tasks_v11', data.tasksStr); if (!document.getElementById('task-modal').classList.contains('hidden')) window.renderTasks(); }
+                        if (data.weeklyStr && safeGet('pages_pomodoro_weekly_v11', null) !== data.weeklyStr) { safeSet('pages_pomodoro_weekly_v11', data.weeklyStr); window.weeklyTemplates = JSON.parse(data.weeklyStr); if (!document.getElementById('settings-modal').classList.contains('hidden')) window.populateSettingsList(); }
+                        if (data.statsStr && safeGet('pages_pomodoro_stats_v11', '{}') !== data.statsStr) { safeSet('pages_pomodoro_stats_v11', data.statsStr); if (!document.getElementById('stats-modal').classList.contains('hidden')) window.renderStatsModal(); }
+                        if (data.mcqStr && safeGet('pages_pomodoro_mcq_v11', '{}') !== data.mcqStr) { safeSet('pages_pomodoro_mcq_v11', data.mcqStr); if (!document.getElementById('task-modal').classList.contains('hidden')) { if (window.activeTaskTab === 'mcq') window.loadMCQInputs(); if (window.activeTaskTab === 'matrix') window.renderTasks(); } }
+                        
+                        isInternalSyncUpdate = false;
+                    }
+                });
+            } catch(e) { }
+        }
+
+        if (currentSyncRoom) { connectToCloud(currentSyncRoom); document.getElementById('login-sync-btn').textContent = "Disconnect System"; }
+
+        document.getElementById('login-sync-btn').addEventListener('click', (e) => {
+            if (currentSyncRoom) { 
+                currentSyncRoom = ''; window.safeRemove('pages_pomodoro_sync_room'); 
+                if(unsubscribeSnapshot) { unsubscribeSnapshot(); unsubscribeSnapshot = null; } 
+                e.target.textContent = "Connect System"; document.getElementById('sync-status').classList.add('hidden');
+            } else {
+                const em = document.getElementById('sync-email-input').value.trim(); const pw = document.getElementById('sync-pass-input').value.trim();
+                if (em && pw) { 
+                    currentSyncRoom = encodeURIComponent(btoa(em+":"+pw)).replace(/%/g, ''); 
+                    safeSet('pages_pomodoro_sync_room', currentSyncRoom); 
+                    e.target.textContent = "Disconnect System"; 
+                    connectToCloud(currentSyncRoom); window.broadcastToCloud(); 
+                    setTimeout(() => document.getElementById('sync-modal').classList.add('hidden'), 1000); 
+                }
+            }
+        });
+        
+        document.getElementById('close-sync-btn').addEventListener('click', () => document.getElementById('sync-modal').classList.add('hidden'));
+        document.getElementById('toggle-sync-pass-btn').addEventListener('click', () => {
+            const passInput = document.getElementById('sync-pass-input');
+            const eyeClosed = document.getElementById('eye-icon-closed');
+            const eyeOpen = document.getElementById('eye-icon-open');
+            if (passInput.type === 'password') { passInput.type = 'text'; eyeClosed.classList.add('hidden'); eyeOpen.classList.remove('hidden'); } 
+            else { passInput.type = 'password'; eyeClosed.classList.remove('hidden'); eyeOpen.classList.add('hidden'); }
+        });
+
+        window.sendTelegramMessage = async function() {
+            const token = safeGet('pages_pomodoro_tg_token', document.getElementById('tg-token-input').value.trim());
+            const chatId = safeGet('pages_pomodoro_tg_chatid', document.getElementById('tg-chatid-input').value.trim());
+            if (!token || !chatId) { window.showToast("Please set Bot Token and Chat ID in Preferences.", true); return; }
+
+            let stats = JSON.parse(safeGet('pages_pomodoro_stats_v11', '{}'));
+            let today = getLocalTodayString(); let todayData = stats[today] || { mins: 0, sessions: 0 };
+            let tasks = JSON.parse(safeGet('pages_pomodoro_tasks_v11', '[]'));
+            let mcqs = JSON.parse(safeGet('pages_pomodoro_mcq_v11', '{}'));
+            let mData = mcqs[today] || {};
+            
+            let bDone = tasks.filter(t => t.type === 'backlog' && t.comp).length; 
+            let rDone = tasks.filter(t => t.type === 'revision' && t.comp).length;
+
+            let text = `🩺 *NEET DAILY PROGRESS REPORT* 🩺\n\n`;
+            text += `⏱️ *Focus Time:* ${todayData.mins} mins (${todayData.sessions} Sessions)\n\n`;
+            text += `🎯 *DAILY MCQ TARGETS:*\n`;
+            ['Physics', 'Chemistry', 'Biology'].forEach(subj => {
+                let d = mData[subj] || {t:0, a:0, c:0};
+                let inc = Math.max(0, d.a - d.c); 
+                let lft = Math.max(0, d.t - d.a);
+                text += `*${subj}:* Att: ${d.a}/${d.t} | ✅ ${d.c} | ❌ ${inc} | ⏳ ${lft}\n`;
+            });
+            text += `\n📚 *VAULT PROGRESS:*\n`;
+            text += `📦 Backlogs Cleared: ${bDone}\n🔁 Revisions Done: ${rDone}\n\n`;
+            text += `🔥 *Protocol Complete. Ready for tomorrow.*`;
+
+            try { 
+                await fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'Markdown' }) }); 
+                const btn = document.getElementById('send-telegram-report-btn'); 
+                if(btn) { btn.innerHTML = "<span class='drop-shadow-md'>✅</span> Sent to Telegram!"; setTimeout(()=> btn.innerHTML = "<span class='drop-shadow-md'>✈️</span> Send God-Mode Report", 3000); }
+            } catch(e) { window.showToast("Telegram Error. Check internet connection.", true); }
+        }
+        document.getElementById('send-telegram-report-btn').addEventListener('click', () => window.sendTelegramMessage());
+
+        window.activeTaskTab = 'backlog'; window.activeTaskSubj = 'Physics';
+
+        window.updateVaultUI = function() {
+            document.querySelectorAll('.task-tab').forEach(t => {
+                let colorClasses = "bg-transparent text-slate-400 hover:bg-white/5 hover:text-slate-300"; 
+                if(t.dataset.tab === window.activeTaskTab) {
+                    if (window.activeTaskTab === 'backlog') colorClasses = "bg-white/10 text-white border border-white/10 shadow-sm";
+                    if (window.activeTaskTab === 'revision') colorClasses = "bg-white/10 text-white border border-white/10 shadow-sm";
+                    if (window.activeTaskTab === 'mcq') colorClasses = "bg-white/10 text-white border border-white/10 shadow-sm";
+                    if (window.activeTaskTab === 'matrix') colorClasses = "bg-white/10 text-white border border-white/10 shadow-sm";
+                }
+                t.className = `task-tab flex-1 min-w-[75px] font-semibold py-2 px-2 rounded-lg text-xs sm:text-sm transition-all ${colorClasses}`;
+            });
+            document.querySelectorAll('.subj-btn').forEach(btn => {
+                if(btn.dataset.subj === window.activeTaskSubj) btn.className = "subj-btn active flex-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 font-semibold py-2 rounded-lg text-xs transition-all";
+                else btn.className = "subj-btn flex-1 glass-btn text-slate-400 font-semibold py-2 rounded-lg text-xs transition-all hover:text-slate-200";
+            });
+
+            const sf = document.getElementById('subject-filter-container'), taf = document.getElementById('task-add-form'), maf = document.getElementById('mcq-add-form');
+            if (window.activeTaskTab === 'matrix') { sf.classList.add('hidden'); taf.classList.add('hidden'); maf.classList.add('hidden'); }
+            else if (window.activeTaskTab === 'mcq') { sf.classList.remove('hidden'); taf.classList.add('hidden'); maf.classList.remove('hidden'); document.getElementById('mcq-subject-title').textContent = `${window.activeTaskSubj} Daily Target`; window.loadMCQInputs(); }
+            else { sf.classList.remove('hidden'); taf.classList.remove('hidden'); maf.classList.add('hidden'); }
+        }
+
+        document.querySelectorAll('.task-tab').forEach(btn => btn.addEventListener('click', (e) => { window.activeTaskTab = e.target.dataset.tab; window.updateVaultUI(); window.renderTasks(); }));
+        document.querySelectorAll('.subj-btn').forEach(btn => btn.addEventListener('click', (e) => { window.activeTaskSubj = e.target.dataset.subj; window.updateVaultUI(); window.renderTasks(); }));
+
+        window.loadMCQInputs = function() {
+            let data = JSON.parse(safeGet('pages_pomodoro_mcq_v11', '{}')); let today = getLocalTodayString();
+            let d = data[today] && data[today][window.activeTaskSubj] ? data[today][window.activeTaskSubj] : {t:0, a:0, c:0};
+            document.getElementById('mcq-target').value = d.t || ''; document.getElementById('mcq-attempted').value = d.a || ''; document.getElementById('mcq-correct').value = d.c || ''; window.updateMCQCalculations();
+        }
+
+        window.updateMCQCalculations = function() {
+            let t = parseInt(document.getElementById('mcq-target').value) || 0; 
+            let a = parseInt(document.getElementById('mcq-attempted').value) || 0; 
+            let c = parseInt(document.getElementById('mcq-correct').value) || 0;
+            document.getElementById('mcq-display-incorrect').textContent = Math.max(0, a - c); 
+            document.getElementById('mcq-display-left').textContent = Math.max(0, t - a); 
+        }
+
+        document.getElementById('mcq-target').addEventListener('input', window.updateMCQCalculations); 
+        document.getElementById('mcq-attempted').addEventListener('input', window.updateMCQCalculations); 
+        document.getElementById('mcq-correct').addEventListener('input', window.updateMCQCalculations);
+
+        document.getElementById('save-mcq-btn').addEventListener('click', () => {
+            let data = JSON.parse(safeGet('pages_pomodoro_mcq_v11', '{}')); let today = getLocalTodayString();
+            if(!data[today]) data[today] = {};
+            data[today][window.activeTaskSubj] = { t: parseInt(document.getElementById('mcq-target').value) || 0, a: parseInt(document.getElementById('mcq-attempted').value) || 0, c: parseInt(document.getElementById('mcq-correct').value) || 0 };
+            safeSet('pages_pomodoro_mcq_v11', JSON.stringify(data));
+            document.getElementById('save-mcq-btn').textContent = "Saved!"; setTimeout(() => document.getElementById('save-mcq-btn').textContent = "Save Data", 1000);
+            window.broadcastToCloud(); 
+        });
+
+        document.getElementById('add-task-btn').addEventListener('click', () => {
+            const input = document.getElementById('task-title-input'); if (!input.value.trim()) return;
+            let tasks = JSON.parse(safeGet('pages_pomodoro_tasks_v11', '[]')); tasks.push({ id: Date.now(), type: window.activeTaskTab, subj: window.activeTaskSubj, title: input.value.trim(), comp: false });
+            safeSet('pages_pomodoro_tasks_v11', JSON.stringify(tasks)); input.value = ''; window.renderTasks(); window.broadcastToCloud(); 
+        });
+
+        window.toggleTask = function(id) { let tasks = JSON.parse(safeGet('pages_pomodoro_tasks_v11', '[]')); let t = tasks.find(x => x.id === id); if(t) { t.comp = !t.comp; safeSet('pages_pomodoro_tasks_v11', JSON.stringify(tasks)); window.renderTasks(); window.broadcastToCloud(); } }
+        window.deleteTask = function(id) { let tasks = JSON.parse(safeGet('pages_pomodoro_tasks_v11', '[]')); tasks = tasks.filter(x => x.id !== id); safeSet('pages_pomodoro_tasks_v11', JSON.stringify(tasks)); window.renderTasks(); window.broadcastToCloud(); }
+
+        window.renderTasks = function() {
+            const container = document.getElementById('vault-list-container'); container.innerHTML = '';
+            if (window.activeTaskTab === 'matrix') {
+                let tasks = JSON.parse(safeGet('pages_pomodoro_tasks_v11', '[]')); let mcqs = JSON.parse(safeGet('pages_pomodoro_mcq_v11', '{}')); let today = getLocalTodayString();
+                ['Physics', 'Chemistry', 'Biology'].forEach(subj => {
+                    let subT = tasks.filter(t => t.subj === subj); let bTot = subT.filter(t => t.type === 'backlog').length; let bDone = subT.filter(t => t.type === 'backlog' && t.comp).length; let rTot = subT.filter(t => t.type === 'revision').length; let rDone = subT.filter(t => t.type === 'revision' && t.comp).length;
+                    let mData = mcqs[today] && mcqs[today][subj] ? mcqs[today][subj] : {t:0, a:0, c:0}; 
+                    let mLeft = Math.max(0, mData.t - mData.a); let mInc = Math.max(0, mData.a - mData.c);
+                    container.innerHTML += `
+                        <div class="bg-black/30 border border-white/5 rounded-xl p-4 mb-3">
+                            <h4 class="text-xs font-bold text-white mb-3 uppercase tracking-widest">${subj} Matrix</h4>
+                            <div class="grid grid-cols-2 gap-2 text-center mb-3">
+                                <div class="bg-white/5 rounded-lg p-2"><p class="text-[9px] text-slate-400 uppercase tracking-wider mb-0.5">Backlogs Left</p><p class="text-sm font-bold text-white">${bTot - bDone}</p></div>
+                                <div class="bg-white/5 rounded-lg p-2"><p class="text-[9px] text-slate-400 uppercase tracking-wider mb-0.5">Revision Left</p><p class="text-sm font-bold text-white">${rTot - rDone}</p></div>
+                            </div>
+                            <div class="bg-black/40 rounded-lg p-2.5 border border-white/5">
+                                <div class="flex justify-between items-center text-center">
+                                    <div><p class="text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Target</p><p class="text-xs font-mono font-bold text-slate-300">${mData.t}</p></div>
+                                    <div><p class="text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Attempt</p><p class="text-xs font-mono font-bold text-blue-400">${mData.a}</p></div>
+                                    <div><p class="text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Correct</p><p class="text-xs font-mono font-bold text-emerald-400">${mData.c}</p></div>
+                                    <div><p class="text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Wrong</p><p class="text-xs font-mono font-bold text-tomato">${mInc}</p></div>
+                                    <div><p class="text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Left</p><p class="text-xs font-mono font-bold text-amber-400">${mLeft}</p></div>
+                                </div>
+                            </div>
+                            <div class="mt-3 text-[10px] text-slate-500 text-center font-bold tracking-[0.2em] uppercase">Accuracy: <span class="${mData.a > 0 ? 'text-white' : ''}">${mData.a > 0 ? Math.round((mData.c/mData.a)*100) : 0}%</span></div>
+                        </div>`;
+                }); return;
+            }
+            if (window.activeTaskTab === 'mcq') return;
+            let filtered = JSON.parse(safeGet('pages_pomodoro_tasks_v11', '[]')).filter(t => t.type === window.activeTaskTab && t.subj === window.activeTaskSubj);
+            if (filtered.length === 0) { container.innerHTML = `<p class="text-slate-500 text-xs italic text-center mt-6">No tasks found. Add one above.</p>`; return; }
+            filtered.forEach(t => {
+                container.innerHTML += `
+                    <div class="flex justify-between items-center p-3 rounded-xl border ${t.comp ? 'bg-black/20 border-white/5 opacity-50' : 'bg-white/5 border-white/10 hover:bg-white/10 transition-colors'}">
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                            <button type="button" onclick="window.toggleTask(${t.id})" class="w-5 h-5 rounded flex items-center justify-center shrink-0 border transition-all ${t.comp ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-black/40 border-white/20 hover:border-white/40 text-transparent'}">${t.comp ? '✓' : ''}</button>
+                            <span class="text-xs sm:text-sm truncate font-medium ${t.comp ? 'line-through text-slate-500' : 'text-slate-200'}">${t.title}</span>
+                        </div>
+                        <button type="button" onclick="window.deleteTask(${t.id})" class="text-red-400 hover:text-red-300 text-xs px-2 shrink-0 opacity-70 hover:opacity-100 transition-opacity">✕</button>
+                    </div>`;
+            });
+        }
+
+        window.renderSchedule = function() {
+            const cont = document.getElementById('schedule-container'); if(!cont) return; cont.innerHTML = '';
+            window.schedule.forEach((item, index) => {
+                if (item.type === 'done') return;
+                let b = "p-3 sm:p-3.5 rounded-xl flex justify-between items-center transition-all border cursor-pointer group ";
+                if (index === window.currentStepIndex) { b += "active-session bg-white/5 text-white border-tomato/30 backdrop-blur-sm shadow-md"; } 
+                else if (item.status === 'completed' || item.status === 'skipped') { b += "completed-session text-slate-500 bg-transparent border-white/5 hover:bg-white/5"; } 
+                else { b += "text-slate-300 bg-white/5 border-white/5 hover:bg-white/10"; }
+                const m = Math.floor(item.duration / 60); const i = item.type === 'work' ? '🧠' : '💧';
+                cont.innerHTML += `<div class="${b}" onclick="if(${index} !== window.currentStepIndex) window.jumpToStep(${index})"><div class="flex items-center gap-3"><span class="text-base opacity-80">${i}</span><span class="font-medium text-xs sm:text-sm tracking-wide group-hover:text-white transition-colors">${item.title}</span></div><span class="text-[10px] font-mono bg-black/40 px-2.5 py-1 rounded-md text-slate-400 border border-white/5">${m}m</span></div>`;
+            });
+            const activeEl = document.querySelector('.active-session'); if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        window.playAlarmSound = function() {
+            const s = window.schedule[window.currentStepIndex]; if (!s) return;
+            try {
+                if (!window.fallbackCtx) window.fallbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (window.fallbackCtx.state === 'suspended') window.fallbackCtx.resume().catch(()=>{});
+                if(window.activeAlarmNodes) window.activeAlarmNodes.forEach(n => {try{n.stop();n.disconnect();}catch(e){}}); window.activeAlarmNodes = [];
+                if (s.type === 'work') {
+                    for (let i = 0; i < 20; i++) { setTimeout(() => { if(!window.isRunning && i > 2) return; 
+                        try { const osc = window.fallbackCtx.createOscillator(); const gain = window.fallbackCtx.createGain(); osc.connect(gain); gain.connect(window.fallbackCtx.destination); osc.type = 'square'; osc.frequency.setValueAtTime(880, window.fallbackCtx.currentTime); osc.frequency.setValueAtTime(660, window.fallbackCtx.currentTime + 0.1); gain.gain.setValueAtTime(0.6, window.fallbackCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, window.fallbackCtx.currentTime + 0.3); osc.start(window.fallbackCtx.currentTime); osc.stop(window.fallbackCtx.currentTime + 0.3); window.activeAlarmNodes.push(osc, gain); } catch(e){}
+                    }, i * 500); }
+                } else {
+                    const notes = [523.25, 659.25, 783.99, 1046.50]; 
+                    for(let i=0; i<12; i++) { setTimeout(() => { if(!window.isRunning && i > 2) return; 
+                        try { const osc = window.fallbackCtx.createOscillator(); const gain = window.fallbackCtx.createGain(); osc.connect(gain); gain.connect(window.fallbackCtx.destination); osc.type = 'sine'; osc.frequency.value = notes[i % notes.length]; gain.gain.setValueAtTime(0.4, window.fallbackCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, window.fallbackCtx.currentTime + 2.5); osc.start(window.fallbackCtx.currentTime); osc.stop(window.fallbackCtx.currentTime + 2.5); window.activeAlarmNodes.push(osc, gain); } catch(e){}
+                    }, i * 800); }
+                }
+            } catch(e) {}
+        }
+        
+        document.body.addEventListener('click', () => { if (!window.audioCtxUnlocked) { try { window.fallbackCtx = new (window.AudioContext || window.webkitAudioContext)(); const osc = window.fallbackCtx.createOscillator(); const gain = window.fallbackCtx.createGain(); osc.connect(gain); gain.connect(window.fallbackCtx.destination); gain.gain.value = 0.01; osc.start(window.fallbackCtx.currentTime); osc.stop(window.fallbackCtx.currentTime + 0.01); window.audioCtxUnlocked = true; } catch(e) {} } }, { once: true });
+
+        window.updateStats = function(minutes) {
+            let stats = JSON.parse(safeGet('pages_pomodoro_stats_v11', '{}')); let today = getLocalTodayString();
+            if(!stats[today]) stats[today] = { mins: 0, sessions: 0 };
+            stats[today].mins += minutes; stats[today].sessions += 1;
+            safeSet('pages_pomodoro_stats_v11', JSON.stringify(stats)); window.broadcastToCloud(); 
+        }
+
+        window.loadStep = function(index, preserveState = false) {
+            window.currentStepIndex = Math.max(0, Math.min(index, window.schedule.length - 1));
+            const s = window.schedule[window.currentStepIndex];
+            document.getElementById('undo-btn').disabled = window.currentStepIndex === 0; document.getElementById('skip-btn').disabled = window.currentStepIndex >= window.schedule.length - 1;
+            if(!preserveState) window.timeLeft = s.duration;
+            document.getElementById('session-type').textContent = s.type === 'done' ? "Done" : s.title;
+            document.getElementById('current-phase-display').textContent = s.phaseName || (s.type === 'work' ? "DEEP FOCUS" : "REST");
+
+            const guideBox = document.getElementById('deep-guide-box');
+            const guideTitle = document.getElementById('guide-box-title');
+            const guideText = document.getElementById('deep-guide-text');
+            
+            guideBox.classList.remove('hidden');
+
+            if (s.type === 'work') { 
+                guideTitle.innerHTML = "🔥 AI COACH (FOCUS)";
+                guideTitle.className = "text-[9px] sm:text-[10px] uppercase font-bold tracking-[0.2em] text-tomato mb-2 flex items-center gap-2 opacity-80";
+                guideText.textContent = s.guide || window.studyQuotes[Math.floor(Math.random() * window.studyQuotes.length)];
+                document.getElementById('anim-study').classList.remove('hidden'); 
+                document.getElementById('anim-break').classList.add('hidden'); 
+            } 
+            else if (s.type === 'break') { 
+                guideTitle.innerHTML = "💧 AI COACH (REST)";
+                guideTitle.className = "text-[9px] sm:text-[10px] uppercase font-bold tracking-[0.2em] text-blue-400 mb-2 flex items-center gap-2 opacity-80";
+                guideText.textContent = s.guide || window.breakQuotes[Math.floor(Math.random() * window.breakQuotes.length)];
+                document.getElementById('anim-study').classList.add('hidden'); 
+                document.getElementById('anim-break').classList.remove('hidden'); 
+            }
+            else {
+                guideTitle.innerHTML = "🏆 PROTOCOL COMPLETE";
+                guideTitle.className = "text-[9px] sm:text-[10px] uppercase font-bold tracking-[0.2em] text-emerald-400 mb-2 flex items-center gap-2 opacity-80";
+                guideText.textContent = s.guide || "Rest well. Tomorrow we go again.";
+                document.getElementById('anim-study').classList.add('hidden'); 
+                document.getElementById('anim-break').classList.add('hidden'); 
+            }
+
+            window.lastRenderedTime = -1; window.updateDisplay(); window.renderSchedule(); if (window.currentStepIndex > 0 && !window.isRunning && !isInternalSyncUpdate && !preserveState) window.playAlarmSound(); window.persistState();
+        }
+
+        window.updateDisplay = function() {
+            if (window.timeLeft === window.lastRenderedTime) return; window.lastRenderedTime = window.timeLeft;
+            const m = Math.floor(window.timeLeft / 60); const s = window.timeLeft % 60;
+            const t = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            document.getElementById('time-display').textContent = t; document.getElementById('dim-time-display').textContent = t;
+        }
+
+        window.timerCoreTick = function() {
+            if (!window.isRunning) return; const now = Date.now(); const remaining = Math.round((window.targetEndTime - now) / 1000);
+            if (remaining <= 0) { clearInterval(window.timerInterval); window.timeLeft = 0; window.updateDisplay(); window.completeSession(); } 
+            else if (remaining !== window.timeLeft) { window.timeLeft = remaining; window.updateDisplay(); window.persistState(); if (window.timeLeft % 5 === 0) window.broadcastToCloud(); }
+        }
+
+        window.startTimer = function(skipBc = false) {
+            if (window.isRunning) return; window.requestWakeLock(); window.isRunning = true; document.getElementById('start-btn').classList.add('hidden'); document.getElementById('pause-btn').classList.remove('hidden');
+            
+            const s = window.schedule[window.currentStepIndex];
+            if (window.lastPopupStep !== window.currentStepIndex && s && s.type !== 'done') {
+                window.lastPopupStep = window.currentStepIndex;
+                clearTimeout(window.aiPopupTimeout); clearTimeout(window.guidePopupTimeout);
+                
+                const aiCoachModal = document.getElementById('ai-coach-modal');
+                const guideModal = document.getElementById('full-screen-guide-modal');
+                
+                if (aiCoachModal) aiCoachModal.classList.add('hidden'); 
+                if (guideModal) guideModal.classList.add('hidden');
+                
+                if (s.type === 'work') {
+                    const aiText = document.getElementById('ai-coach-text');
+                    if (aiCoachModal && aiText) { 
+                        aiText.textContent = window.studyQuotes[Math.floor(Math.random() * window.studyQuotes.length)]; 
+                        aiCoachModal.classList.remove('hidden'); 
+                        window.aiPopupTimeout = setTimeout(() => aiCoachModal.classList.add('hidden'), 10000); 
+                    }
+                } else if (s.type === 'break') {
+                    const guideTextFull = document.getElementById('full-screen-guide-text');
+                    if (guideModal && guideTextFull) { 
+                        guideTextFull.textContent = window.breakQuotes[Math.floor(Math.random() * window.breakQuotes.length)]; 
+                        guideModal.classList.remove('hidden'); 
+                        window.guidePopupTimeout = setTimeout(() => guideModal.classList.add('hidden'), 10000); 
+                    }
+                }
+            }
+
+            if(!skipBc) window.targetEndTime = Date.now() + (window.timeLeft * 1000);
+            clearInterval(window.timerInterval); window.timerInterval = setInterval(window.timerCoreTick, 250);
+            window.persistState(); if(!skipBc) window.broadcastToCloud(); 
+        }
+
+        window.stopTimer = function(skipBc = false) {
+            if (!window.isRunning) return; window.releaseWakeLock(); window.isRunning = false; document.getElementById('start-btn').classList.remove('hidden'); document.getElementById('pause-btn').classList.add('hidden');
+            clearInterval(window.timerInterval); window.persistState(); if(!skipBc) window.broadcastToCloud(); 
+        }
+
+        window.completeSession = function() {
+            window.stopTimer(); const s = window.schedule[window.currentStepIndex]; s.status = 'completed'; safeSet('pages_pomodoro_schedule_v11', JSON.stringify(window.schedule));
+            if(s.type === 'work') { window.updateStats(Math.floor(s.duration / 60)); } window.playAlarmSound();
+            if (window.currentStepIndex < window.schedule.length - 1) { window.loadStep(window.currentStepIndex + 1); window.startTimer(); } window.broadcastToCloud();
+        }
+
+        window.jumpToStep = function(index) {
+            window.stopTimer(); if(window.activeAlarmNodes) window.activeAlarmNodes.forEach(n => {try{n.stop();n.disconnect();}catch(e){}}); window.activeAlarmNodes = [];
+            if (window.schedule[window.currentStepIndex] && window.schedule[window.currentStepIndex].status !== 'completed') { window.schedule[window.currentStepIndex].status = 'skipped'; safeSet('pages_pomodoro_schedule_v11', JSON.stringify(window.schedule)); }
+            window.lastPopupStep = -1;
+            window.loadStep(index); window.startTimer(); window.broadcastToCloud(); 
+        }
+
+        window.populateSettingsList = function() {
+            const list = document.getElementById('settings-list'); list.innerHTML = ''; let currentPlan = window.weeklyTemplates[window.activeTemplateDay] || [];
+            currentPlan.forEach((item, index) => {
+                if (item.type === 'done') return;
+                list.innerHTML += `
+                    <div class="flex items-center gap-3 w-full bg-black/20 p-2.5 rounded-xl border border-white/5">
+                        <span class="text-[10px] font-mono text-slate-500 w-4">#${index+1}</span>
+                        <input type="text" value="${item.title}" data-index="${index}" class="session-title-input flex-1 bg-black/40 border border-white/10 rounded-md px-3 py-1.5 text-xs text-white focus:outline-none focus:border-white/20 transition-colors">
+                        <input type="number" value="${Math.floor(item.duration/60)}" data-index="${index}" class="session-dur-input w-14 bg-black/40 border border-white/10 rounded-md px-2 py-1.5 text-xs text-white text-center font-mono focus:outline-none focus:border-white/20 transition-colors">
+                        <button type="button" onclick="window.templateDelete(${index})" class="text-slate-500 hover:text-red-400 transition-colors text-xs px-2 opacity-70 hover:opacity-100">✕</button>
+                    </div>`;
+            });
+        }
+
+        window.templateDelete = function(index) {
+            window.weeklyTemplates[window.activeTemplateDay].splice(index, 1); safeSet('pages_pomodoro_weekly_v11', JSON.stringify(window.weeklyTemplates));
+            if(window.activeTemplateDay === new Date().getDay()) { window.schedule = JSON.parse(JSON.stringify(window.weeklyTemplates[window.activeTemplateDay])); safeSet('pages_pomodoro_schedule_v11', JSON.stringify(window.schedule)); if(window.currentStepIndex >= window.schedule.length) window.loadStep(Math.max(0, window.schedule.length - 1)); else window.renderSchedule(); }
+            window.populateSettingsList(); window.broadcastToCloud();
+        }
+
+        document.getElementById('add-sess-btn').addEventListener('click', () => {
+            const title = document.getElementById('new-sess-title').value.trim() || "New Block"; const dur = parseInt(document.getElementById('new-sess-dur').value) || 50; const type = document.getElementById('new-sess-type').value;
+            window.weeklyTemplates[window.activeTemplateDay].push({ id: Date.now(), type: type, title: title, duration: dur * 60 }); safeSet('pages_pomodoro_weekly_v11', JSON.stringify(window.weeklyTemplates));
+            document.getElementById('new-sess-title').value = '';
+            if(window.activeTemplateDay === new Date().getDay()) { window.schedule = JSON.parse(JSON.stringify(window.weeklyTemplates[window.activeTemplateDay])); safeSet('pages_pomodoro_schedule_v11', JSON.stringify(window.schedule)); window.renderSchedule(); }
+            window.populateSettingsList(); window.broadcastToCloud();
+        });
+
+        document.querySelectorAll('.day-tab-btn').forEach(btn => btn.addEventListener('click', (e) => { window.activeTemplateDay = parseInt(e.target.dataset.day); document.querySelectorAll('.day-tab-btn').forEach(b => b.className = "day-tab-btn flex-1 min-w-[35px] glass-btn text-slate-400 text-[10px] px-2 py-2 rounded-lg font-semibold"); e.target.className = "day-tab-btn flex-1 min-w-[35px] bg-white/10 text-white text-[10px] px-2 py-2 rounded-lg font-semibold border border-white/20 shadow-sm"; window.populateSettingsList(); }));
+        
+        document.getElementById('save-settings-btn').addEventListener('click', () => {
+            const titleInputs = document.querySelectorAll('.session-title-input'); const durInputs = document.querySelectorAll('.session-dur-input');
+            titleInputs.forEach(inp => { let idx = parseInt(inp.getAttribute('data-index')); if(window.weeklyTemplates[window.activeTemplateDay][idx]) window.weeklyTemplates[window.activeTemplateDay][idx].title = inp.value; });
+            durInputs.forEach(inp => { let idx = parseInt(inp.getAttribute('data-index')); if(window.weeklyTemplates[window.activeTemplateDay][idx]) window.weeklyTemplates[window.activeTemplateDay][idx].duration = parseInt(inp.value) * 60; });
+            safeSet('pages_pomodoro_tg_token', document.getElementById('tg-token-input').value.trim()); safeSet('pages_pomodoro_tg_chatid', document.getElementById('tg-chatid-input').value.trim());
+            
+            const sqInput = document.getElementById('custom-study-quotes').value.trim(); const bqInput = document.getElementById('custom-break-quotes').value.trim();
+            window.studyQuotes = sqInput ? sqInput.split('\n').filter(q=>q.trim()!=='') : window.defaultStudyQuotes;
+            window.breakQuotes = bqInput ? bqInput.split('\n').filter(q=>q.trim()!=='') : window.defaultBreakQuotes;
+            safeSet('pages_pomodoro_study_quotes', JSON.stringify(window.studyQuotes)); safeSet('pages_pomodoro_break_quotes', JSON.stringify(window.breakQuotes));
+
+            safeSet('pages_pomodoro_weekly_v11', JSON.stringify(window.weeklyTemplates));
+            if(window.activeTemplateDay === new Date().getDay()) { window.schedule = JSON.parse(JSON.stringify(window.weeklyTemplates[window.activeTemplateDay])); safeSet('pages_pomodoro_schedule_v11', JSON.stringify(window.schedule)); window.renderSchedule(); }
+            document.getElementById('settings-modal').classList.add('hidden'); window.broadcastToCloud();
+        });
+
+        document.getElementById('stealth-corner-select').addEventListener('change', (e) => { document.body.setAttribute('data-corner', e.target.value); });
+        
+        const urlParams = new URLSearchParams(window.location.search); if (urlParams.has('prism') || urlParams.has('overlay')) { document.body.classList.add('stealth-mode'); }
+        document.getElementById('stealth-btn').addEventListener('click', () => { document.body.classList.toggle('stealth-mode'); window.lastRenderedTime = -1; window.updateDisplay(); });
+
+        document.getElementById('dim-mode-btn').addEventListener('click', () => { document.getElementById('dim-overlay').classList.remove('hidden'); });
+        document.getElementById('dim-overlay').addEventListener('click', () => { document.getElementById('dim-overlay').classList.add('hidden'); });
+        document.getElementById('task-manager-btn').addEventListener('click', () => { window.updateVaultUI(); window.renderTasks(); document.getElementById('task-modal').classList.remove('hidden'); });
+        document.getElementById('close-task-btn').addEventListener('click', () => document.getElementById('task-modal').classList.add('hidden'));
+        
+        document.getElementById('edit-schedule-btn').addEventListener('click', () => { 
+            window.stopTimer(); window.populateSettingsList(); 
+            document.getElementById('tg-token-input').value = safeGet('pages_pomodoro_tg_token', ''); document.getElementById('tg-chatid-input').value = safeGet('pages_pomodoro_tg_chatid', '');
+            document.getElementById('custom-study-quotes').value = window.studyQuotes.join('\n'); document.getElementById('custom-break-quotes').value = window.breakQuotes.join('\n');
+            document.getElementById('settings-modal').classList.remove('hidden'); 
+        });
+        document.getElementById('close-settings-btn').addEventListener('click', () => document.getElementById('settings-modal').classList.add('hidden'));
+        document.getElementById('close-stats-btn').addEventListener('click', () => document.getElementById('stats-modal').classList.add('hidden'));
+        document.getElementById('cloud-sync-btn').addEventListener('click', () => { document.getElementById('settings-modal').classList.add('hidden'); document.getElementById('sync-modal').classList.remove('hidden'); });
+        document.getElementById('factory-reset-btn').addEventListener('click', () => { localStorage.clear(); window.location.reload(); });
+
+        document.getElementById('stats-btn').addEventListener('click', () => window.renderStatsModal());
+        window.renderStatsModal = function() {
+            let stats = JSON.parse(safeGet('pages_pomodoro_stats_v11', '{}')); let today = getLocalTodayString(); let todayStats = stats[today] || {mins: 0, sessions: 0};
+            document.getElementById('stat-today-mins').innerHTML = `${todayStats.mins}<span class="text-[10px] text-slate-500 ml-1">m</span>`; document.getElementById('stat-today-sessions').textContent = todayStats.sessions;
+            let weeklyMins = 0; for(let i=0; i<7; i++) { let d = new Date(); d.setDate(d.getDate() - i); let dStr = d.toISOString().split('T')[0]; if(stats[dStr]) weeklyMins += stats[dStr].mins; }
+            document.getElementById('stat-weekly-total').textContent = `${weeklyMins}m`; document.getElementById('stats-modal').classList.remove('hidden'); 
+        }
+
+        let savedStateRaw = safeGet('pages_pomodoro_app_state', null); let savedSchedule = safeGet('pages_pomodoro_schedule_v11', null);
+        if (savedSchedule) window.schedule = JSON.parse(savedSchedule); else { window.schedule = JSON.parse(JSON.stringify(window.weeklyTemplates[new Date().getDay()])); safeSet('pages_pomodoro_schedule_v11', JSON.stringify(window.schedule)); }
+        if (savedStateRaw) {
+            try { let s = JSON.parse(savedStateRaw); window.currentStepIndex = s.currentStepIndex || 0; window.targetEndTime = s.targetEndTime || 0; window.loadStep(window.currentStepIndex, true); 
+                if (s.isRunning) { let rem = Math.round((s.targetEndTime - Date.now()) / 1000); if (rem > 0) { window.timeLeft = rem; window.updateDisplay(); window.startTimer(); } else { window.timeLeft = 0; window.updateDisplay(); window.completeSession(); } } 
+                else { window.timeLeft = s.timeLeft !== undefined ? s.timeLeft : window.schedule[window.currentStepIndex].duration; window.updateDisplay(); }
+            } catch(e) { window.loadStep(0); }
+        } else window.loadStep(0);
+        
+        window.renderSchedule(); window.updateVaultUI(); window.renderTasks();
+
+        document.getElementById('start-btn').addEventListener('click', () => window.startTimer());
+        document.getElementById('pause-btn').addEventListener('click', () => window.stopTimer());
+        document.getElementById('skip-btn').addEventListener('click', () => { if(window.currentStepIndex < window.schedule.length - 1) window.jumpToStep(window.currentStepIndex + 1); });
+        document.getElementById('stealth-skip-btn').addEventListener('click', () => { if(window.currentStepIndex < window.schedule.length - 1) window.jumpToStep(window.currentStepIndex + 1); });
+        document.getElementById('undo-btn').addEventListener('click', () => { if(window.currentStepIndex > 0) window.jumpToStep(window.currentStepIndex - 1); });
+        document.getElementById('reset-phase-btn').addEventListener('click', () => window.jumpToStep(window.currentStepIndex));
+    </script>
+</body>
+</html>
